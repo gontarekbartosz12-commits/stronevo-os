@@ -1,0 +1,261 @@
+{
+  "name": "ADA - Kalendarz (check + book)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ada-check-slots",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-check",
+      "name": "Webhook check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ],
+      "webhookId": "ada-check-slots"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst timeMin = new Date(now.getTime() + 60*60*1000).toISOString();\nconst timeMax = new Date(now.getTime() + 7*24*60*60*1000).toISOString();\nreturn [{ json: { timeMin, timeMax } }];"
+      },
+      "id": "build-window",
+      "name": "Build window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/freeBusy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({timeMin:$json.timeMin,timeMax:$json.timeMax,timeZone:'Europe/Warsaw',items:[{id:'primary'}]}) }}"
+      },
+      "id": "freebusy",
+      "name": "FreeBusy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "<N8N_GOOGLE_CREDENTIAL_ID>",
+          "name": "Google Calendar OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { DateTime } = require('luxon');\nconst busy = ($json.calendars && $json.calendars.primary && $json.calendars.primary.busy) || [];\nconst TZ = 'Europe/Warsaw';\nconst busyIv = busy.map(b => ({ s: DateTime.fromISO(b.start), e: DateTime.fromISO(b.end) }));\nconst SLOT = 30, D0 = 9, D1 = 19;\nfunction free(dt){ const end = dt.plus({minutes:SLOT});\n  return dt > DateTime.now().plus({hours:1}) && !busyIv.some(b => dt < b.e && end > b.s); }\nconst PL = {1:'w poniedzialek',2:'we wtorek',3:'w srode',4:'w czwartek',5:'w piatek'};\nconst out = [];\nlet base = DateTime.now().setZone(TZ).startOf('day');\nfor (let d=0; d<7 && out.length<3; d++){\n  const day = base.plus({days:d}); if (day.weekday > 5) continue;\n  for (let h=D0; h<D1 && out.length<3; h++){\n    for (let m=0; m<60; m+=SLOT){\n      const dt = day.set({hour:h,minute:m,second:0,millisecond:0});\n      if (free(dt)){\n        const rel = d===0?'dzisiaj':(d===1?'jutro':PL[day.weekday]);\n        out.push({ when_iso: dt.toISO(), spoken: rel+' o '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0') });\n      }\n    }\n  }\n}\nconst spoken = out.length\n  ? 'Mam wolne terminy: '+out.map(o=>o.spoken).join(', ')+'. Ktory Panu lub Pani odpowiada?'\n  : 'Niestety nie widze wolnych terminow w tym tygodniu.';\nreturn [{ json: { ok: out.length>0, slots: out, spoken } }];"
+      },
+      "id": "compute-slots",
+      "name": "Compute slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond-check",
+      "name": "Respond check",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ada-book-slot",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-book",
+      "name": "Webhook book",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        460
+      ],
+      "webhookId": "ada-book-slot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { DateTime } = require('luxon');\nconst a = $json.body || $json;\nif (!a.when_iso) throw new Error('Brak when_iso');\nconst start = DateTime.fromISO(a.when_iso, { zone: 'Europe/Warsaw' });\nconst end = start.plus({ minutes: 30 });\nconst hasEmail = !!(a.email && a.email.includes('@'));\nreturn [{ json: {\n  summary: 'Konsultacja STRONEVO - ' + (a.firstName || 'Klient'),\n  description: 'Rozmowa umowiona przez Ade. Temat: ' + (a.branza || 'automatyzacje') + '. Lead: ' + (a.lead_id || '-'),\n  attendeeEmail: hasEmail ? a.email : '',\n  hasEmail,\n  startISO: start.toISO(),\n  endISO: end.toISO(),\n  requestId: 'ada-' + (a.lead_id || Date.now()) + '-' + Math.floor(Math.random()*1e6),\n  whenSpoken: start.setLocale('pl').toFormat(\"cccc d LLLL 'o' HH:mm\")\n} }];"
+      },
+      "id": "prep-event",
+      "name": "Prep event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify( Object.assign({summary:$json.summary, description:$json.description,start:{dateTime:$json.startISO,timeZone:'Europe/Warsaw'},end:{dateTime:$json.endISO,timeZone:'Europe/Warsaw'},conferenceData:{createRequest:{requestId:$json.requestId,conferenceSolutionKey:{type:'hangoutsMeet'}}},reminders:{useDefault:true}}, $json.hasEmail ? {attendees:[{email:$json.attendeeEmail}]} : {}) ) }}"
+      },
+      "id": "insert-event",
+      "name": "Insert event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        460
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "<N8N_GOOGLE_CREDENTIAL_ID>",
+          "name": "Google Calendar OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $json;\nlet meet = ev.hangoutLink || '';\nif (!meet && ev.conferenceData && ev.conferenceData.entryPoints){\n  const v = ev.conferenceData.entryPoints.find(e => e.entryPointType === 'video');\n  meet = v ? v.uri : '';\n}\nreturn [{ json: {\n  ok: !!ev.id, meet,\n  when: $('Prep event').item.json.whenSpoken,\n  eventId: ev.id || null, htmlLink: ev.htmlLink || ''\n} }];"
+      },
+      "id": "shape-reply",
+      "name": "Shape reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond-book",
+      "name": "Respond book",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook check": {
+      "main": [
+        [
+          {
+            "node": "Build window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build window": {
+      "main": [
+        [
+          {
+            "node": "FreeBusy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FreeBusy": {
+      "main": [
+        [
+          {
+            "node": "Compute slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute slots": {
+      "main": [
+        [
+          {
+            "node": "Respond check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook book": {
+      "main": [
+        [
+          {
+            "node": "Prep event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep event": {
+      "main": [
+        [
+          {
+            "node": "Insert event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert event": {
+      "main": [
+        [
+          {
+            "node": "Shape reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape reply": {
+      "main": [
+        [
+          {
+            "node": "Respond book",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

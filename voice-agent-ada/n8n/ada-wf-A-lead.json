@@ -1,0 +1,173 @@
+{
+  "name": "ADA - A - Lead -> Polaczenie",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ada-lead-in",
+        "responseMode": "responseNode"
+      },
+      "id": "wh-lead",
+      "name": "Webhook lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "ada-lead-in"
+    },
+    {
+      "parameters": {
+        "jsCode": "function toE164PL(raw){let d=String(raw||'').replace(/[^\\d+]/g,'');if(d.startsWith('+48'))d=d.slice(3);else if(d.startsWith('0048'))d=d.slice(4);else if(d.startsWith('48')&&d.length===11)d=d.slice(2);d=d.replace(/\\D/g,'');if(d.length!==9)throw new Error('Zly PL nr: '+raw);return '+48'+d;}\nfunction detectGender(f){ if(!f) return {salutation:'neutral',a_suffix:''};\n const n=String(f).trim().toLowerCase();\n const MALE_A=new Set(['barnaba','bonawentura','kuba','kosma','sasza','dyzma','jarema','zawisza','juda','aleksa']);\n const MALE_DIM=new Set(['kuba','bartek','staszek','jasiek','wojtek','romek','tomek','olek','antek','franek','maciek','krzysiek','przemek','darek','marek','janek','jurek','zbyszek','rysiek','patryk','dominik','dawidek']);\n const FEMALE_DIM=new Set(['gosia','kasia','basia','zosia','asia','marysia','madzia','karolcia','nikol','miriam','noemi','ester']);\n if(FEMALE_DIM.has(n)) return {salutation:'Pani',a_suffix:'a'};\n if(MALE_DIM.has(n)||MALE_A.has(n)) return {salutation:'Pan',a_suffix:'y'};\n const last=n.slice(-1);\n if(last==='a') return {salutation:'Pani',a_suffix:'a'};\n if(['o','i','y'].includes(last)) return {salutation:'Pan',a_suffix:'y'};\n if(!'aeiouyaeo'.includes(last)) return {salutation:'Pan',a_suffix:'y'};\n return {salutation:'neutral',a_suffix:''}; }\nconst { DateTime } = require('luxon');\nconst j = $json.body || $json;\nconst number = toE164PL(j.phone || j.phoneRaw);\nconst g = detectGender(j.firstName);\nconst now = DateTime.now().setZone('Europe/Warsaw');\nconst inHours = now.weekday <= 5 && now.hour >= 9 && now.hour < 19;\nreturn [{ json: {\n  lead_id: j.lead_id || ('L-' + Math.floor(Math.random()*1e6)),\n  firstName: j.firstName || '', lastName: j.lastName || '',\n  number, branza: j.branza || '',\n  salutation: g.salutation === 'neutral' ? '' : g.salutation,\n  a_suffix: g.a_suffix,\n  allowed: inHours, reason: inHours ? 'ok' : 'poza godzinami 9-19 Pn-Pt'\n} }];"
+      },
+      "id": "validate",
+      "name": "Validate + Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "gate",
+      "name": "Bramka godziny",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.vapi.ai/call",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({assistantId:'<VAPI_ASSISTANT_ID>',phoneNumberId:'<VAPI_PHONE_NUMBER_ID>',customer:{number:$json.number, name:($json.firstName+' '+$json.lastName).trim()},assistantOverrides:{variableValues:{mode:'outbound_booking', firstName:$json.firstName, salutation:$json.salutation,a_suffix:$json.a_suffix, branza:$json.branza, lead_id:$json.lead_id}}}) }}"
+      },
+      "id": "vapi",
+      "name": "Vapi Call (Ada dzwoni)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ok:true, dzwonie_do:$json.number, lead_id:$json.lead_id}) }}"
+      },
+      "id": "resp-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ok:false, reason:$json.reason}) }}"
+      },
+      "id": "resp-block",
+      "name": "Respond Blokada",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        920,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook lead": {
+      "main": [
+        [
+          {
+            "node": "Validate + Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + Enrich": {
+      "main": [
+        [
+          {
+            "node": "Bramka godziny",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bramka godziny": {
+      "main": [
+        [
+          {
+            "node": "Vapi Call (Ada dzwoni)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Blokada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vapi Call (Ada dzwoni)": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

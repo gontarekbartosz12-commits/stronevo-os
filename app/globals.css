@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink text-stone-300 font-sans antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(123, 45, 59, 0.18), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 110%, rgba(216, 182, 119, 0.05), transparent);
+  background-attachment: fixed;
+}
+
+/* Delikatny scrollbar pod ciemny motyw */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #372a2d;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7b2d3b;
+}
+
+/* Druk umowy (/umowa/[id]) — czarny tekst na białym, bez chrome'u panelu */
+@media print {
+  body {
+    background: #fff !important;
+    background-image: none !important;
+    color: #111 !important;
+  }
+}
+
+/* Dokument umowy (markdown → HTML) */
+.contract-doc h1 {
+  @apply mb-4 mt-2 font-serif text-2xl font-bold leading-snug text-gold;
+}
+.contract-doc h2 {
+  @apply mb-3 mt-8 font-serif text-lg font-bold text-stone-100;
+}
+.contract-doc h3 {
+  @apply mb-2 mt-5 font-serif text-base font-bold text-stone-200;
+}
+.contract-doc p {
+  @apply mb-2 text-sm leading-relaxed text-stone-300;
+}
+.contract-doc p.ind {
+  @apply pl-6;
+}
+.contract-doc ul {
+  @apply mb-3 list-disc space-y-1 pl-6 text-sm leading-relaxed text-stone-300;
+}
+.contract-doc blockquote {
+  @apply my-4 border-l-2 border-gold-dim bg-gold/5 px-4 py-2 text-sm italic text-stone-400;
+}
+.contract-doc hr {
+  @apply my-6 border-ink-border;
+}
+.contract-doc table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.contract-doc th,
+.contract-doc td {
+  @apply border border-ink-border px-3 py-2 text-left text-stone-300;
+}
+.contract-doc strong {
+  @apply font-semibold text-stone-100;
+}
+@media print {
+  .contract-doc h1,
+  .contract-doc h2,
+  .contract-doc h3,
+  .contract-doc strong {
+    color: #111 !important;
+  }
+  .contract-doc p,
+  .contract-doc ul,
+  .contract-doc td,
+  .contract-doc th,
+  .contract-doc blockquote {
+    color: #222 !important;
+  }
+  .contract-doc th,
+  .contract-doc td,
+  .contract-doc hr,
+  .contract-doc blockquote {
+    border-color: #999 !important;
+  }
+  .contract-doc blockquote {
+    background: #f5f5f5 !important;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-ink-border bg-ink-soft px-3 py-2 text-sm text-stone-200
+      placeholder:text-stone-600 focus:border-gold-dim focus:outline-none focus:ring-1 focus:ring-gold-dim/50;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium uppercase tracking-wider text-stone-500;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-md bg-bordo px-4 py-2 text-sm font-semibold text-stone-100
+      transition hover:bg-bordo-light focus:outline-none focus:ring-2 focus:ring-gold/40 disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-md border border-ink-border px-4 py-2 text-sm text-stone-300
+      transition hover:border-gold-dim hover:text-gold-light focus:outline-none;
+  }
+  .card {
+    @apply rounded-lg border border-ink-border bg-ink-card;
+  }
+}

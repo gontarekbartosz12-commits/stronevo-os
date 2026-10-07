@@ -1,0 +1,25 @@
+# STRONEVO OS — desktopowy wrapper (Tauri v2, thin shell na crm.stronevo.pl)
+[package]
+name = "stronevo-os-desktop"
+version = "1.0.0"
+description = "STRONEVO OS — panel operacyjny (desktop)"
+authors = ["STRONEVO Bartosz Gontarek"]
+edition = "2021"
+
+[lib]
+name = "stronevo_os_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+[profile.release]
+# mały .exe: optymalizacja rozmiaru + strip symboli
+opt-level = "s"
+lto = true
+strip = true

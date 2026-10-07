@@ -1,0 +1,187 @@
+{
+  "name": "ADA - C - Koniec rozmowy (SMS+Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ada-eoc",
+        "responseMode": "responseNode"
+      },
+      "id": "wh-eoc",
+      "name": "Webhook koniec rozmowy",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "ada-eoc"
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = ($json.body && $json.body.message) || $json.message || $json.body || $json;\nconst num = (m.customer && m.customer.number) || m.customerNumber || '';\nconst cost = m.cost || (m.costBreakdown && m.costBreakdown.total) || 0;\nconst ended = m.endedReason || m.endReason || '';\nconst sd = (m.analysis && m.analysis.structuredData) || m.structuredData || {};\nconst booked = !!(sd.booked || sd.when_iso || sd.meet);\nreturn [{ json: {\n  number: num, cost, endedReason: ended, booked,\n  whenSpoken: sd.whenSpoken || sd.when || '',\n  meet: sd.meet || '',\n  summary: (m.analysis && m.analysis.summary) || m.summary || '',\n  tg: 'Ada: ' + (booked ? 'UMOWIONE' : 'brak') + ' | nr ' + num + ' | ' + (ended||'?') + ' | koszt $' + (Math.round((cost||0)*100)/100) + (booked ? (' | ' + (sd.whenSpoken||sd.when||'')) : '')\n} }];"
+      },
+      "id": "parse",
+      "name": "Parse EOC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "={{ $json.tg }}",
+        "additionalFields": {}
+      },
+      "id": "tg",
+      "name": "Telegram Swistak",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.booked }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "gate-book",
+      "name": "Czy umowione?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.smsapi.pl/sms/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({to:$json.number.replace('+',''),from:'WKLEJ_NADAWCA',message:'Dzien dobry! Potwierdzamy spotkanie '+$json.whenSpoken+'. Link do Google Meet: '+$json.meet+' - STRONEVO',format:'json', encoding:'utf-8'}) }}"
+      },
+      "id": "sms",
+      "name": "SMSAPI potwierdzenie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ok:true, booked:$json.booked}) }}"
+      },
+      "id": "resp-c",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook koniec rozmowy": {
+      "main": [
+        [
+          {
+            "node": "Parse EOC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse EOC": {
+      "main": [
+        [
+          {
+            "node": "Telegram Swistak",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Swistak": {
+      "main": [
+        [
+          {
+            "node": "Czy umowione?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Czy umowione?": {
+      "main": [
+        [
+          {
+            "node": "SMSAPI potwierdzenie",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMSAPI potwierdzenie": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
